@@ -9,7 +9,6 @@
 
 # we will convert start_time and end_time for calculation of total active hours using above method
 
-# 
     
 
 
@@ -22,6 +21,14 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Column, Integer, String, DateTime, Float,update
 from sqlalchemy.ext.declarative import declarative_base
+
+from flask import current_app
+
+
+import threading
+
+from io import StringIO
+from uuid import uuid4 
 
 import pytz
 
@@ -68,7 +75,9 @@ class StoreTimezone(db.Model):
 class Solution(db.Model):
     __tablename__ = 'solution'
 
-    store_id = db.Column(String, primary_key=True)
+    id = db.Column(Integer, primary_key=True, autoincrement=True)
+    report_id=db.Column(String,primary_key=True)
+    store_id = db.Column(String)
     uptime_last_hour=db.Column(Float,default=0.0)
     uptime_last_day=db.Column(Float,default=0.0)
     update_last_week=db.Column(Float,default=0.0)
@@ -95,9 +104,11 @@ def insert_data(data, model):
         # Handle integrity error, e.g., duplicate entry
         pass
 
-
+# let me skip the video for when process is complete
 
 # from datetime import datetime, timedelta, timezone
+
+
 
 def calculate_uptime_hour(data):
     current_time = datetime(2023, 1, 24, 9, 30, 0, tzinfo=timezone.utc)  # Get current time in UTC timezone
@@ -116,6 +127,7 @@ def calculate_uptime_hour(data):
             # Calculate time difference
             time_difference = current_time - timestamp_utc
             # print((time_difference))
+
             # print("current_time-",(current_time))
             # print("timestamp-",(timestamp_utc))
             if time_difference <= timedelta(hours=2) and time_difference>=timedelta(hours=0):
@@ -196,8 +208,10 @@ def calculate_uptime_day(data, start_time, end_time, date):
         start_time = start_time.replace(tzinfo=timezone.utc)
     if end_time.tzinfo is None or end_time.tzinfo.utcoffset(end_time) is None:
         end_time = end_time.replace(tzinfo=timezone.utc)
-    start_time = datetime.combine(date, start_time)
-    end_time = datetime.combine(date, end_time)
+    if not isinstance(start_time, datetime):
+        start_time = datetime.combine(date, start_time)
+    if not isinstance(end_time, datetime):
+        end_time = datetime.combine(date, end_time)
 
     # Filter data based on the provided date
     for entry in data:
@@ -227,10 +241,11 @@ def calculate_uptime_day(data, start_time, end_time, date):
     return uptime_day_hours
 
 
+report_id_status={}
 
 
 
-
+# let me skipp the video for when process for when process is complete
 
 
 
@@ -295,8 +310,10 @@ def upload_store_timezone_csv():
     return jsonify({'message': 'Store Timezone CSV uploaded successfully'}), 200
 
 
-@app.route('/calculate', methods=['GET'])
-def calculate():
+
+
+# @app.route('/calculate', methods=['GET'])
+def calculate(report_id):
     data = Data.query.all()
 
     grouped_data = defaultdict(list)
@@ -326,8 +343,8 @@ def calculate():
         uptime_hour = calculate_uptime_hour(store_data)
         
         # Default values for start_time_local and end_time_local
-        start_time_local = time(0, 0)  # Start time assumed to be midnight
-        end_time_local = time(23, 59, 59)  # End time assumed to be 11:59:59 PM
+        start_time_local = datetime.combine(datetime.now().date(), time(0, 0))  # Start time assumed to be midnight
+        end_time_local = datetime.combine(datetime.now().date(), time(23, 59, 59))  # End time assumed to be 11:59:59 PM
         
         # Query BusinessHours for the specific store and day of the week
         business_hours = BusinessHours.query.filter_by(store_id=store_id, day=current_time.weekday()).all()
@@ -336,6 +353,10 @@ def calculate():
             # Extract start and end times from the first record
             start_time_local = business_hours[0].start_time_local.time()
             end_time_local = business_hours[0].end_time_local.time()
+            if not isinstance(start_time_local, datetime):
+                start_time_local = datetime.combine(datetime.now().date(), start_time_local)
+            if not isinstance(end_time_local, datetime):
+                end_time_local = datetime.combine(datetime.now().date(), end_time_local)
             timezone_local = get_timezone(business_hours[0].timezone_str)
             if(timezone_local):
                 start_time_local=timezone_local.localize(start_time_local).astimezone(pytz.utc)
@@ -350,14 +371,18 @@ def calculate():
             business_hours_week = BusinessHours.query.filter_by(store_id=store_id, day=day_of_week_date).all()
             
             # Default values for start_time_local_week and end_time_local_week
-            start_time_local_week = time(0, 0)  # Start time assumed to be midnight
-            end_time_local_week = time(23, 59, 59)  # End time assumed to be 11:59:59 PM
+            start_time_local_week = datetime.combine(datetime.now().date(), time(0, 0))  # Start time assumed to be midnight
+            end_time_local_week = datetime.combine(datetime.now().date(), time(23, 59, 59))  # End time assumed to be 11:59:59 PM
 
 
             if business_hours_week:
                 # Extract start and end times from the first record
                 start_time_local_week = business_hours_week[0].start_time_local.time()
                 end_time_local_week = business_hours_week[0].end_time_local.time()
+                if not isinstance(start_time_local_week, datetime):
+                    start_time_local_week = datetime.combine(datetime.now().date(), start_time_local_week)
+                if not isinstance(end_time_local_week, datetime):
+                    end_time_local_week = datetime.combine(datetime.now().date(), end_time_local_week)
                 timezone_week = get_timezone(business_hours_week[0].timezone_str)
                 if(timezone_week):
                     start_time_local_week=timezone_week.localize(start_time_local_week).astimezone(pytz.utc)
@@ -367,6 +392,7 @@ def calculate():
             start_time += timedelta(days=1)
         
         row = {
+            "report_id":report_id,
             'store_id': store_id,
             'uptime_last_hour': float(uptime_hour * 60 / 60),
             'uptime_last_day': float(uptime_day * 60 / 60),
@@ -377,13 +403,80 @@ def calculate():
             'timezone_str': 'UTC'
         }
         insert_data(row, Solution)
+    print("completed")
+    report_id_status[report_id]={"status":"Completed"}
 
     return jsonify({'message': 'Calculated successfully'}), 200
 
 
 
+def calculate_with_context(report_id):
+    with app.app_context():
+        calculate(report_id)
 
-    
+@app.route('/trigger_report', methods=['GET'])
+def trigger_report():
+    report_id = str(uuid4())
+    report_id = "75525471-1b1d-471a-9f27-85dd0b8506a2"
+    report_id_status[report_id] = {"status": "Running"}
+
+    # Start a new thread to execute calculate function within the application context
+    threading.Thread(target=calculate_with_context, args=(report_id,)).start()
+
+    return jsonify({"report_id": report_id})
+
+
+# let me skip the video for when process completes
+
+
+
+
+
+
+@app.route("/get_report", methods=["GET"])
+def get_report():
+    report_id = request.args.get("report_id")
+    if report_id not in report_id_status:
+        return jsonify({"error": "Invalid report ID"}), 400
+
+    report_status = report_id_status[report_id]["status"]
+    print(report_status)
+    if report_status == "Running":
+        return jsonify({"status": "Running"})
+    elif report_status == "Completed":
+        try:
+            solution_list = Solution.query.filter_by(report_id=report_id).all()
+
+            # Check if there are any solutions
+            if not solution_list:
+                return jsonify({"error": "No solutions found for the report"}), 404
+
+            # Get field names from the first solution
+            fieldnames = ["store_id", "uptime_last_hour", "uptime_last_day", "update_last_week",
+                          "downtime_last_hour", "downtime_last_day", "downtime_last_week", "timezone_str"]
+
+            csv_output = StringIO()
+            writer = csv.DictWriter(csv_output, fieldnames=fieldnames)
+            writer.writeheader()
+            for solution in solution_list:
+                writer.writerow({fieldname: getattr(solution, fieldname) for fieldname in fieldnames})
+
+            # Set content type and return CSV data
+            response = csv_output.getvalue()
+
+            return response, 200, {'Content-Type': 'text/csv'}
+        except Exception as e:
+            # Handle potential errors
+            return jsonify({"error": str(e)}), 500
+        
+    else:
+        # Handle unexpected report states
+        return jsonify({"error": "Unknown report status"}), 500
+
+
+
+
+
 
 
 # Route to get data from data source 1
@@ -391,6 +484,21 @@ def calculate():
 def get_data():
     data = Data.query.all()
     data_list = [{'id': d.id, 'timestamp_utc': d.timestamp_utc, 'status': d.status} for d in data]
+
+    # Check for CSV preference based on Accept header
+    if request.headers.get("Accept") == "text/csv":
+        # Generate CSV data in memory
+        print("yes")
+        csv_output = StringIO()
+        writer = csv.DictWriter(csv_output, fieldnames=data_list[0].keys())
+        writer.writeheader()
+        writer.writerows(data_list)
+
+        # Set content type and return CSV data
+        response = csv_output.getvalue()
+        csv_output.close()  # Close the in-memory stream
+        return response, 200, {'Content-Type': 'text/csv'}
+
     return jsonify(data_list), 200
 
 # Route to get data from data source 2
