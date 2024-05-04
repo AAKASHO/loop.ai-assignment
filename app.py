@@ -417,7 +417,6 @@ def calculate_with_context(report_id):
 @app.route('/trigger_report', methods=['GET'])
 def trigger_report():
     report_id = str(uuid4())
-    report_id = "75525471-1b1d-471a-9f27-85dd0b8506a2"
     report_id_status[report_id] = {"status": "Running"}
 
     # Start a new thread to execute calculate function within the application context
