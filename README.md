@@ -30,11 +30,38 @@ This Flask-based API calculates the active time of stores based on provided data
 - Ensure that the CSV files uploaded match the expected format for each table.
 
 ## logic for interpolation of the data
-- to get the data for last hour of current_time here function will take the current time of your choice but it can be changed and assumming there is no data after the time of current-time we will get the observation which have closest time from the current-time assuming the data has taken the observation roughly every hour for a store "
+- to get the data for last hour of current_time here function will take the current time of your choice but it can be changed and assumming there is no data after the time of current-time we will get the observation which have closest time from the current-time assuming the data has taken the observation roughly every hour for a store we will take the data taken in betweeen 2 hours of the current time"
 
 # for example
-- current time is 04/05/2024 2:32 pm with the pattern of observation taken there are atmost 2 observation in the span of last 2 hour 
-lets say closest time a observation is take is 2:10 observation before that closest to it can be lets say 1:30 pm
+- current time is 04/05/2024 2:32 pm the the observation taken after 12:32 and 2:32 ae taken into account the get the closest minute of every minute , as some minutes can be closer to the observation taken before 1 hours this is assuming ecery store is observed roughly every hour..., and if the at the observation closest to the given minute given store was active then we will assume store is active at the minute
+
+example
+`lets say for a minute at 1:40 pm ` closest observation taken is `1:00 pm` and store is marked active at the time then we will add 1 to the uptime in last hour
+
+
+for downtime we will take the minimum if min(60,current time - start time) as if store is open for more the 1 hour only take 1 hour else taking the `current time - start time` as total time 
+
+`total down time hour = total time - total uptime`
+
+similarily we have taken the total uptime for last day 
+
+we have saparated the observation taken for the store in the last day and for every given hour from its start_time on that day to end_time on that day if at the closest observation of the given hour, store is active then we assume store is active at the given hour
+
+to improve time complexity after saperating the data for the day we are doing the binary search to find the closest hour
+
+## for example 
+
+lets say store is active on a given day from `9:00 AM to 8:00 PM` for any hour lets us take `1:00 pm` at the closest observation taken lets us say `1:40 PM` value is `active` then store is marked active on that hour
+
+for downtime last day we have taken total work time of the store on that day - total active time on that day
+
+now for uptime last week
+
+we will find the uptime of the given store every day on last week using above method of finding total uptime last day 
+
+total downtime is taken accordingily
+
+
 
 
 ## Contributors
