@@ -138,6 +138,7 @@ def calculate_uptime_hour(data):
     
     observation_times=[]
     for row in data:
+        print(row)
         timestamp_utc, status = row['timestamp_utc'], row['status']
         if timestamp_utc is not None: 
 
@@ -331,11 +332,12 @@ final_answer=[]
 
 # @app.route('/calculate', methods=['GET'])
 def calculate(report_id):
-    # data = Data.query.all()
+    data = Data.query.all()
+
 
     current_time=datetime(2023, 1, 24, 7, 30, 0, tzinfo=timezone.utc)
 
-    data = Data.query.filter(Data.timestamp_utc >= current_time - timedelta(weeks=1)).all()
+    # data = Data.query.filter(Data.timestamp_utc >= current_time - timedelta(weeks=1)).all()
     grouped_data = defaultdict(list)
     for row in data:
         grouped_data[row.store_id].append({
@@ -360,7 +362,8 @@ def calculate(report_id):
     
     for store_id, store_data in grouped_data.items():
         # print(store_id)
-        len(store_data)
+        print("len(store_data)")
+        print(len(store_data))
         uptime_hour = calculate_uptime_hour(store_data)
         
         # Default values for start_time_local and end_time_local
