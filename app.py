@@ -105,70 +105,6 @@ def insert_data(data, model):
 
 # from datetime import datetime, timedelta, timezone
 
-
-
-def calculate_uptime_hour(data):
-    current_time = datetime(2023, 1, 24, 9, 30, 0, tzinfo=timezone.utc)  # Get current time in UTC timezone
-    uptime_last_hour = 0
-    last_hour1_val = None
-    last_hour2_val = None
-    last_hour1 = None
-    last_hour2 = None
-    
-    for row in data:
-        timestamp_utc, status = row['timestamp_utc'], row['status']
-        if timestamp_utc is not None: 
-
-            if timestamp_utc.tzinfo is None or timestamp_utc.tzinfo.utcoffset(timestamp_utc) is None:
-                timestamp_utc = timestamp_utc.replace(tzinfo=timezone.utc)
-            # Calculate time difference
-            time_difference = current_time - timestamp_utc
-            # print((time_difference))
-
-            # print("current_time-",(current_time))
-            # print("timestamp-",(timestamp_utc))
-            if time_difference <= timedelta(hours=2) and time_difference>=timedelta(hours=0):
-                # print(abs(time_difference))
-                if last_hour1_val:
-                    last_hour2_val = timestamp_utc
-                    last_hour2 = 1 if status == "active" else 0
-                else:
-                    last_hour1_val = timestamp_utc
-                    last_hour1 = 1 if status == "active" else 0
-
-        
-    # return current_time
-    temp = current_time - timedelta(hours=1)
-    # print(last_hour1_val)
-    while temp<current_time:
-        # Determine which timestamp the current minute is closer to
-        # print(current_time)
-        if last_hour1_val and last_hour2_val:  # Ensure both timestamps are not None
-            if abs((temp - last_hour1_val).total_seconds()) < abs((temp - last_hour2_val).total_seconds()):
-                status = last_hour1
-            else:
-
-                status = last_hour2
-        else:
-            status = 0  # Default status if either timestamp is None
-        
-        uptime_last_hour += status
-        temp += timedelta(minutes=1)
-        # return uptime_last_hour
-    return uptime_last_hour
-        # Add uptime based on the status
-        
-        # Move to the next minute
-
-
-
-def get_timezone(timezone_str):
-    try:
-        return pytz.timezone(timezone_str)
-    except pytz.UnknownTimeZoneError:
-        return None
-
-
 def find_closest_hour(observation_times, target):
     if not observation_times:
         return None
@@ -194,6 +130,73 @@ def find_closest_hour(observation_times, target):
         closest = observation_times[left - 1]
     
     return closest
+
+
+def calculate_uptime_hour(data):
+    current_time = datetime(2023, 1, 24, 9, 30, 0, tzinfo=timezone.utc)  # Get current time in UTC timezone
+    uptime_last_hour = 0
+    last_hour1_val = None
+    last_hour2_val = None
+    last_hour1 = None
+    last_hour2 = None
+    
+    observation_times=[]
+    for row in data:
+        timestamp_utc, status = row['timestamp_utc'], row['status']
+        if timestamp_utc is not None: 
+
+            if timestamp_utc.tzinfo is None or timestamp_utc.tzinfo.utcoffset(timestamp_utc) is None:
+                timestamp_utc = timestamp_utc.replace(tzinfo=timezone.utc)
+            # Calculate time difference
+            time_difference = current_time - timestamp_utc
+            # print((time_difference))
+
+            # print("current_time-",(current_time))
+            # print("timestamp-",(timestamp_utc))
+            if time_difference <= timedelta(hours=2) and time_difference>=timedelta(hours=0):
+                # print(abs(time_difference))
+
+                observation_times.append({
+                    'timestamp_utc': timestamp_utc,
+                    'status': row['status']
+                })
+                # if last_hour1_val:
+                #     last_hour2_val = timestamp_utc
+                #     last_hour2 = 1 if status == "active" else 0
+                # else:
+                #     last_hour1_val = timestamp_utc
+                #     last_hour1 = 1 if status == "active" else 0
+
+        
+    # return current_time
+
+    observation_times.sort(key=lambda x: x['timestamp_utc'])
+    temp = current_time - timedelta(hours=1)
+    # print(last_hour1_val)
+    while temp<current_time:
+        # Determine which timestamp the current minute is closer to
+        # print(current_time)
+        closest_time = find_closest_hour(observation_times, current_time)
+        if closest_time is not None and closest_time['status'] == 'active':
+            uptime_last_hour+=1
+        
+        uptime_last_hour += status
+        temp += timedelta(minutes=1)
+        # return uptime_last_hour
+    return uptime_last_hour
+        # Add uptime based on the status
+        
+        # Move to the next minute
+
+
+
+def get_timezone(timezone_str):
+    try:
+        return pytz.timezone(timezone_str)
+    except pytz.UnknownTimeZoneError:
+        return None
+
+
 
 
 
