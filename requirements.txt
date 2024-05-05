@@ -1,5 +1,6 @@
-Flask-SQLAlchemy==3.0.1
-PyJWT==2.3.0
-pytz==2021.3
-SQLAlchemy==1.4.31
+Flask-SQLAlchemy
+sqlalchemy
+PyJWT
+pytz
+SQLAlchemy
 psycopg2

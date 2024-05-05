@@ -135,10 +135,6 @@ def find_closest_hour(observation_times, target):
 def calculate_uptime_hour(data):
     current_time = datetime(2023, 1, 24, 9, 30, 0, tzinfo=timezone.utc)  # Get current time in UTC timezone
     uptime_last_hour = 0
-    last_hour1_val = None
-    last_hour2_val = None
-    last_hour1 = None
-    last_hour2 = None
     
     observation_times=[]
     for row in data:
@@ -179,8 +175,7 @@ def calculate_uptime_hour(data):
         closest_time = find_closest_hour(observation_times, current_time)
         if closest_time is not None and closest_time['status'] == 'active':
             uptime_last_hour+=1
-        
-        uptime_last_hour += status
+
         temp += timedelta(minutes=1)
         # return uptime_last_hour
     return uptime_last_hour
@@ -418,6 +413,8 @@ def calculate(report_id):
             
             uptime_week += calculate_uptime_day(store_data, start_time_local_week, end_time_local_week, start_time.date())
             start_time += timedelta(days=1)
+        start_time_local = start_time_local.replace(tzinfo=timezone.utc)
+        end_time_local = end_time_local.replace(tzinfo=timezone.utc)
         
         row = {
             "report_id":report_id,
