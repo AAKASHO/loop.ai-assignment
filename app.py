@@ -80,7 +80,7 @@ class Solution(db.Model):
     store_id = db.Column(String)
     uptime_last_hour=db.Column(Float,default=0.0)
     uptime_last_day=db.Column(Float,default=0.0)
-    update_last_week=db.Column(Float,default=0.0)
+    uptime_last_week=db.Column(Float,default=0.0)
     downtime_last_hour=db.Column(Float,default=0.0)
     downtime_last_day=db.Column(Float,default=0.0)
     downtime_last_week=db.Column(Float,default=0.0)
@@ -228,6 +228,7 @@ def calculate_uptime_day(data, start_time, end_time, date):
     # Sort observation times by timestamp
     observation_times.sort(key=lambda x: x['timestamp_utc'])
 
+
     current_time = start_time
     uptime_day_hours = 0
 
@@ -259,21 +260,34 @@ def upload_data_csv():
     if not csv_file:
         return jsonify({'error': 'No file provided'}), 400
 
+    # Save the CSV file temporarily
     csv_file.save('data.csv')
-    x=0
+
+    data_to_insert = []
+
     with open('data.csv', 'r') as file:
         reader = csv.DictReader(file)
+        
         for row in reader:
             # Adjust timestamp format string to match the format in the CSV file
-            row['timestamp_utc'] = datetime.strptime(row['timestamp_utc'], '%Y-%m-%d %H:%M:%S.%f %Z')
+            try:
+                row['timestamp_utc'] = datetime.strptime(row['timestamp_utc'], '%Y-%m-%d %H:%M:%S %Z')
+            except ValueError:
+                try:
+                    row['timestamp_utc'] = datetime.strptime(row['timestamp_utc'], '%Y-%m-%d %H:%M:%S.%f %Z')
+                except ValueError:
+                    pass
 
-            if(x%11==0):
-                row['status']='Inactive'
-            x+=1
-            insert_data(row, Data)
+            # Add 'status' field based on your condition
+
+            data_to_insert.append(row)
+
+    # Perform bulk insert
+    with app.app_context():
+        db.session.bulk_insert_mappings(Data, data_to_insert)
+        db.session.commit()
 
     return jsonify({'message': 'Data CSV uploaded successfully'}), 200
-
 # Route to upload CSV file for data source 2
 @app.route('/upload/business_hours', methods=['POST'])
 def upload_business_hours_csv():
@@ -283,13 +297,19 @@ def upload_business_hours_csv():
 
     csv_file.save('business_hours.csv')
 
+    data_to_insert = []
+
     with open('business_hours.csv', 'r') as file:
         reader = csv.DictReader(file)
         for row in reader:
             # Adjust timestamp format string to match the format in the CSV file
             row['start_time_local'] = datetime.strptime(row['start_time_local'], '%H:%M:%S')
             row['end_time_local'] = datetime.strptime(row['end_time_local'], '%H:%M:%S')
-            insert_data(row, BusinessHours)
+            data_to_insert.append(row)
+            # insert_data(row, BusinessHours)
+    with app.app_context():
+        db.session.bulk_insert_mappings(BusinessHours, data_to_insert)
+        db.session.commit()
 
     return jsonify({'message': 'Business Hours CSV uploaded successfully'}), 200
 
@@ -312,10 +332,15 @@ def upload_store_timezone_csv():
 
 
 
+final_answer=[]
+
 # @app.route('/calculate', methods=['GET'])
 def calculate(report_id):
-    data = Data.query.all()
+    # data = Data.query.all()
 
+    current_time=datetime(2023, 1, 24, 7, 30, 0, tzinfo=timezone.utc)
+
+    data = Data.query.filter(Data.timestamp_utc >= current_time - timedelta(weeks=1)).all()
     grouped_data = defaultdict(list)
     for row in data:
         grouped_data[row.store_id].append({
@@ -323,7 +348,6 @@ def calculate(report_id):
             'status': row.status
         })
 
-    current_time=datetime(2023, 1, 24, 7, 30, 0, tzinfo=timezone.utc)
 
     update_stmt = (
         update(BusinessHours)
@@ -340,6 +364,7 @@ def calculate(report_id):
     
     for store_id, store_data in grouped_data.items():
         # print(store_id)
+        len(store_data)
         uptime_hour = calculate_uptime_hour(store_data)
         
         # Default values for start_time_local and end_time_local
@@ -365,6 +390,7 @@ def calculate(report_id):
         uptime_day = calculate_uptime_day(store_data, start_time_local, end_time_local, current_time.date())
         
         uptime_week = 0
+        total_uptime_week=0
         start_time = current_time - timedelta(days=7)
         while start_time <= current_time:
             day_of_week_date = start_time.weekday()
@@ -380,6 +406,7 @@ def calculate(report_id):
                 start_time_local_week = business_hours_week[0].start_time_local.time()
                 end_time_local_week = business_hours_week[0].end_time_local.time()
                 if not isinstance(start_time_local_week, datetime):
+
                     start_time_local_week = datetime.combine(datetime.now().date(), start_time_local_week)
                 if not isinstance(end_time_local_week, datetime):
                     end_time_local_week = datetime.combine(datetime.now().date(), end_time_local_week)
@@ -387,6 +414,7 @@ def calculate(report_id):
                 if(timezone_week):
                     start_time_local_week=timezone_week.localize(start_time_local_week).astimezone(pytz.utc)
                     end_time_local_week=timezone_week.localize(end_time_local_week).astimezone(pytz.utc)
+            total_uptime_week+=(end_time_local_week-start_time_local_week).total_seconds()/3600
             
             uptime_week += calculate_uptime_day(store_data, start_time_local_week, end_time_local_week, start_time.date())
             start_time += timedelta(days=1)
@@ -395,14 +423,25 @@ def calculate(report_id):
             "report_id":report_id,
             'store_id': store_id,
             'uptime_last_hour': float(uptime_hour * 60 / 60),
+            # 'uptime_last_hour': float(10000 * 60 / 60),
             'uptime_last_day': float(uptime_day * 60 / 60),
-            'update_last_week': float(uptime_week * 60 / 60),
-            'downtime_last_hour': 0.5,
-            'downtime_last_day': 5.0,
-            'downtime_last_week': 20.0,
+            # 'uptime_last_day': float(10000 * 60 / 60),
+            'uptime_last_week': float(uptime_week * 60 / 60),
+            # 'update_last_week': float(10000 * 60 / 60),
+            'downtime_last_hour': min(60,(current_time-start_time_local).total_seconds()/60)-float(uptime_hour * 60 / 60),
+            'downtime_last_day': (end_time_local-start_time_local).total_seconds()/3600-float(uptime_day * 60 / 60),
+            'downtime_last_week': total_uptime_week-float(uptime_week * 60 / 60),
             'timezone_str': 'UTC'
         }
-        insert_data(row, Solution)
+        final_answer.append(row)
+
+        print(len(final_answer))
+    #     insert_data(row, Solution)
+    with app.app_context():
+        db.session.bulk_insert_mappings(Solution, final_answer)
+        db.session.commit()
+
+
     print("completed")
     report_id_status[report_id]={"status":"Completed"}
 
@@ -482,6 +521,7 @@ def get_report():
 @app.route('/data', methods=['GET'])
 def get_data():
     data = Data.query.all()
+    
     data_list = [{'id': d.id, 'timestamp_utc': d.timestamp_utc, 'status': d.status} for d in data]
 
     # Check for CSV preference based on Accept header
