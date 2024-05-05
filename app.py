@@ -356,6 +356,7 @@ def calculate(report_id):
 
     day_of_week=current_time.weekday()
 
+
     
     for store_id, store_data in grouped_data.items():
         # print(store_id)
@@ -487,7 +488,7 @@ def get_report():
                 return jsonify({"error": "No solutions found for the report"}), 404
 
             # Get field names from the first solution
-            fieldnames = ["store_id", "uptime_last_hour", "uptime_last_day", "update_last_week",
+            fieldnames = ["store_id", "uptime_last_hour", "uptime_last_day", "uptime_last_week",
                           "downtime_last_hour", "downtime_last_day", "downtime_last_week", "timezone_str"]
 
             csv_output = StringIO()
